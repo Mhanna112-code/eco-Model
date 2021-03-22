@@ -195,11 +195,10 @@ class PT(nn.Module):
         return torch.mul(weight, value).sum(1)
 
     def loss(self, users, items, negItems):
-        nusers = users.view(-1, 1).to(self.device)
-        nusers = nusers.expand(nusers.shape[0], self.params['negNum_train']).reshape(-1).to(self.device)
+        users = users.expand(users.shape[0], self.params['negNum_train']).to(self.device)
 
         pOut = self.forward(users, items).view(-1, 1).expand(users.shape[0], self.params['negNum_train']).reshape(-1, 1)
-        nOut = self.forward(nusers, negItems).reshape(-1, 1)
+        nOut = self.forward(users, negItems).reshape(-1, 1)
 
         criterion = nn.Sigmoid()
         loss = torch.mean(criterion(pOut - nOut))
@@ -217,10 +216,6 @@ class PT(nn.Module):
 
 if __name__ == '__main__':
     keys_file = open("S&O.json", 'r', errors='ignore', encoding='UTF-8')
-    keys = keys_file.read()
-    keys_json = json.loads(keys)
-    print(keys_json)
-    print('\n');
     params = dict()
     params['lr'] = 1e-3
     params['batch_size'] = 2
@@ -235,22 +230,28 @@ if __name__ == '__main__':
     params['lambda'] = 1.
     params['test_per_train'] = 2
 
-    category = 'Patio_Lawn_and_Garden'
-
-    train, test = dataloader.read_data(category)
-    userNum, itemNum = dataloader.get_datasize(category)
-    frequency = dataloader.get_distribution(category)
+    category1 = 'newTrainSamples'
+    category2 = 'newTestSamples'
+    catAll = 'AllSamples'
+    train, test = dataloader.read_data(category1,category2)
+    ratings = []
+    for rating in train:
+        ratings.append(train[rating][1])
+    data = np.array(ratings)
+    trainUserNum, trainItemNum = dataloader.get_datasize(category1)
+    testUserNum, testItemNum = dataloader.get_datasize(category2)
+    frequency = dataloader.get_distribution(data)
     distribution = dataloader.approx_Gaussian(frequency)
 
-    trainset = dataloader.TransactionData(train, userNum, itemNum, distribution)
+    trainset = dataloader.TransactionData(train, trainUserNum, trainItemNum, distribution)
     trainLoader = DataLoader(trainset, shuffle=False, num_workers=0)
 
-    testset = dataloader.UserTransactionData(test, userNum, itemNum, trainset.userHist)
+    testset = dataloader.UserTransactionData(test, testUserNum, testItemNum, trainset.userHist)
     testset.set_negN(params['negNum_test'])
     testLoader = DataLoader(testset, shuffle=False, num_workers=0)
 
     prices = np.full(11,100)
-    model = PT(userLen=userNum, itemLen=itemNum, distribution=distribution, params=params, item_price=prices)
+    model = PT(userLen=trainUserNum, itemLen=testItemNum, distribution=distribution, params=params, item_price=prices)
     print('initialization', model.state_dict())
     optimizer = optim.SGD(model.parameters(), lr=params['lr'], weight_decay=params['w_decay'])
 

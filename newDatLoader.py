@@ -280,7 +280,7 @@ if __name__ == '__main__':
 	train = read_data(category1)
 	test = read_data(category2)
 	userNum, itemNum = get_datasize(catAll)
-	#np.savetxt('npyAllSamples', read_data(catAll))
+	#np.savetxt('AllSamples.npy', read_data(catAll))
 	frequency = np.array(read_data(catAll))
 	distribution = approx_Gaussian(frequency)
 

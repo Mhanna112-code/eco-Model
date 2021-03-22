@@ -140,10 +140,8 @@ def get_datasize(category):
 	#return price
 
 
-def get_distribution(category):
-	address = "ItemResult.npy"
-	distribution = np.load(address)
-	return distribution
+def get_distribution(data):
+	return norm.cdf(data)
 
 def convert_Strings_to_Numbers(category):
 	Asins = []
@@ -182,13 +180,13 @@ def convert_Strings_to_Numbers(category):
 	except IOError as e:
 		print(e)
 		print('IOError: Unable to open')
-	print(len(np.unique(Asins)))
+	"""print(len(np.unique(Asins)))
 	print('--->')
 	print(len(np.unique(Reviewers)))
 	print('--->')
 	print(len(np.unique(Reviews)))
 	print('--->')
-	print(np.unique(Reviews))
+	print(np.unique(Reviews))"""
 	return numDict
 
 class TransactionData(torch.utils.data.Dataset):
@@ -203,31 +201,26 @@ class TransactionData(torch.utils.data.Dataset):
 		self.rating_distribution = rating_distribution
 		self.userHist = [[] for i in range(self.userNum)]
 		userList = []
-		itemList = []
 		for row in transactions:
-			itemList.append(transactions[row][0])
-			userList.append(row)
-		self.userHist = [[] for i in range(self.itemNum)]
-		for i in range(len(itemList)):
-			self.userHist[itemList[i]].append(userList[i])
+			item = transactions[row][0]
+			self.userHist[row].append(item)
 		#self.userHist = np.array(self.userHist)
 		#self.userHist = torch.from_numpy(self.userHist[:])
 	#comment
 	def __len__(self):
 		return self.L
 
-	def __getitem__(self, idx):
-		if idx > 10:
-			idx = 0
-		user = self.userHist[idx]
-		item = idx
+	def __getitem__(self, userIdx):
+		if userIdx >= self.userNum:
+			userIdx = 0
+		item = self.userHist[userIdx]
 		rating = []
 		for reviewer in self.transactions:
-			if int(self.transactions[reviewer][0]) == idx:
-				rating.append(int(float(self.transactions[reviewer][1])))
-		negItem = self.get_neg(user, item)
+			if int(reviewer == userIdx):
+				rating.append(float(self.transactions[reviewer][1]))
+		negItem = self.get_neg(userIdx, item)
 		distribution = self.rating_distribution[item]
-		return {'user': np.array(user).astype(np.int64),
+		return {'user': np.array(userIdx).astype(np.int64),
 				'item': np.array(item).astype(np.int64),
 				'r_distribution': np.array(distribution).astype(float),
 				'rating': np.array(rating).astype(float),
@@ -236,14 +229,10 @@ class TransactionData(torch.utils.data.Dataset):
 
 	def get_neg(self, userid, itemid):
 		neg = list()
-		hist = []
-		for user in self.userHist:
-			if user == userid:
-				hist.append(userid)
 		for i in range(self.negNum):
 			while True:
 				negId = np.random.randint(self.itemNum)
-				if negId not in hist and negId not in neg:
+				if (negId != itemid) and negId not in neg:
 					neg.append(negId)
 					break
 		return neg
@@ -263,16 +252,11 @@ class UserTransactionData(torch.utils.data.Dataset):
 		self.userNum = userNum
 		self.itemNum = itemNum
 		self.negNum = 10
-		self.userHist = [[] for i in range(self.itemNum)]
 		self.trainHist = trainHist
-		userList = []
-		itemList = []
+		self.userHist = [[] for i in range(self.userNum)]
 		for row in transactions:
-			itemList.append(transactions[row][0])
-			userList.append(row)
-		self.userHist = [[] for i in range(self.itemNum)]
-		for i in range(len(itemList)):
-			self.userHist[itemList[i]].append(userList[i])
+			item = transactions[row][0]
+			self.userHist[row].append(item)
 		#self.userHist = np.array(self.userHist)
 		#self.userHist = torch.from_numpy(self.userHist[:])
 
@@ -319,17 +303,16 @@ if __name__ == '__main__':
 	params['negNum_test'] = 1000
 	params['negNum_train'] = 2
 	params['l_size'] = 11
-	reviews = []
-	for reviewer in train.values():
-		reviews.append(reviewer[1])
-	data = np.array(reviews)
-	np.save('ItemResult', data)
+	ratings = []
+	for rating in train:
+		ratings.append(train[rating][1])
+	data = np.array(ratings)
 	train, test = read_data(category1, category2)
-	userNum, itemNum = get_datasize(catAll)
-	frequency = get_distribution(catAll)
-	distribution = norm.cdf(frequency)
-	trainset = TransactionData(train, userNum, itemNum, distribution)
-	testset = UserTransactionData(test, userNum, itemNum, trainset.userHist)
+	trainUserNum, trainItemNum = get_datasize(category1)
+	testUserNum, testItemNum = get_datasize(category2)
+	frequency = get_distribution(data)
+	trainset = TransactionData(train, trainUserNum, trainItemNum, frequency)
+	testset = UserTransactionData(test, testUserNum, testItemNum, trainset.userHist)
 	#comment
 	trainset.set_negN(params['negNum_train'])
 	trainLoader = DataLoader(trainset)
@@ -338,14 +321,12 @@ if __name__ == '__main__':
 	#testLoader = DataLoader(testset, batch_size=1, num_workers=0)
 
 	for counter, batchData in enumerate(trainLoader):
-		print(batchData)
 		if counter == 1:
 			break
 
 		users = batchData['user'].numpy().astype(np.int32)
-		#print('users', type(users))
-		#print('keys: ', batchData.keys())
-		#print('r distribution', batchData['r_distribution'])
-		#print('summation', batchData['r_distribution'].sum(1))
-		#print('negItem', batchData['negItem'])
-
+		print('users', type(users))
+		print('keys: ', batchData.keys())
+		print('r distribution', batchData['r_distribution'])
+		print('summation', batchData['r_distribution'].sum(1))
+		print('negItem', batchData['negItem'])
