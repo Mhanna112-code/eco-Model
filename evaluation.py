@@ -67,7 +67,6 @@ def ranking_performance(score_dict, k):
     # print('avg recall', avgRecall[:10])
     # print('avg NDCG', avgNDCG[:10])
     avgPrec /= len(score_dict)
-    print('length of score_dict', len(score_dict))
     avgRecall /= len(score_dict)
     avgNDCG /= len(score_dict)
     avgAUC /= len(score_dict)
